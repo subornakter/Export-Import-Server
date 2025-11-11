@@ -128,13 +128,13 @@ app.patch('/allProducts/:id', async (req, res) => {
   const result = await productsCollection.updateOne(filter, updateDoc);
   res.send(result);
 });
-// app.get('/search', async (req, res) => {
-//   const searchText = req.query.search;
-//   const result = await productsCollection 
-//     .find({ productName: { $regex: searchText, $options: "i" } })
-//     .toArray();
-//   res.send(result);
-// });
+app.get('/search', async (req, res) => {
+  const searchText = req.query.search;
+  const result = await productsCollection 
+    .find({ productName: { $regex: searchText, $options: "i" } })
+    .toArray();
+  res.send(result);
+});
 
 
     await client.db("admin").command({ ping: 1 });
