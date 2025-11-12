@@ -1,5 +1,6 @@
 const express = require('express')
 const cors = require("cors");
+require("dotenv").config();
 const app = express()
 const { MongoClient, ServerApiVersion,ObjectId } = require('mongodb');
 const port = process.env.PORT || 5000;
@@ -7,7 +8,7 @@ const port = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-const uri = "mongodb+srv://ImportExport-db:bNqDEmyZ84wjVEvx@cluster0.r9l6yhe.mongodb.net/?appName=Cluster0";
+const uri = `mongodb+srv://${process.env.DB_USERNAME}:${process.env.DB_PASSWORD}@cluster0.r9l6yhe.mongodb.net/?appName=Cluster0`;
 app.get('/', (req, res) => {
   res.send('Server is running fine!')
 })
