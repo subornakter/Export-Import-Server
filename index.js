@@ -2,7 +2,7 @@ const express = require('express')
 const cors = require("cors");
 require("dotenv").config();
 const app = express()
-const { MongoClient, ServerApiVersion,ObjectId } = require('mongodb');
+const { MongoClient, ServerApiVersion,ObjectId} = require('mongodb');
 const port = process.env.PORT || 5000;
 
 app.use(cors());
@@ -29,6 +29,56 @@ async function run() {
     const db=client.db("ImportExport");
     const productsCollection=db.collection("products");
     const importCollection=db.collection("imports");
+    const usersCollection = db.collection("users");
+
+//users collection api
+    app.post("/users", async (req, res) => {
+  const userData = req.body;
+
+  // Default role to "user" only if not already set
+  userData.role = userData.role || "user";
+
+  const exists = await usersCollection.findOne({ email: userData.email });
+
+  if (exists) {
+    await usersCollection.updateOne(
+      { email: userData.email },
+      { $set: { last_loggedIn: new Date() } }
+    );
+    return res.send({ updated: true });
+  }
+
+  userData.created_at = new Date();
+  const result = await usersCollection.insertOne(userData);
+  res.send(result);
+});
+
+
+    // Get user role
+app.get("/users/role", async (req, res) => {
+  const email = req.query.email;
+  if (!email) return res.status(400).send({ message: "Email required" });
+
+  try {
+    const user = await usersCollection.findOne({ email });
+    if (!user) return res.status(404).send({ message: "User not found" });
+
+    res.send({ role: user.role });
+  } catch (err) {
+    res.status(500).send({ message: err.message });
+  }
+});
+
+const verifyAdmin = async (req, res, next) => {
+  const email = req.query.email;
+  const user = await usersCollection.findOne({ email });
+
+  if (user?.role !== "admin") {
+    return res.status(403).send({ message: "Forbidden Access" });
+  }
+  next();
+};
+
 
     //find all products
     app.get('/allProducts',async(req,res)=>{
@@ -38,7 +88,7 @@ async function run() {
     });
 
     //post method to add a product
-    app.post('/allProducts',async(req,res)=>{
+    app.post('/allProducts',verifyAdmin,async(req,res)=>{
       const newProduct=req.body;
         const result=await productsCollection.insertOne(newProduct);
         res.send({
@@ -138,6 +188,73 @@ app.get('/search', async (req, res) => {
 });
 
 
+app.get("/admin/stats", verifyAdmin, async (req, res) => {
+  try {
+    const email = req.query.email;
+
+    // total users
+    const totalUsers = await usersCollection.countDocuments();
+
+    // 🔥 ONLY MY EXPORTS
+    const myExportStats = await productsCollection.aggregate([
+      {
+        $match: { addedBy: email },
+      },
+      {
+        $group: {
+          _id: null,
+          myTotalExports: { $sum: 1 },
+          myExportValue: { $sum: "$price" },
+          myTotalQuantity: { $sum: "$availableQuantity" },
+          avgRating: { $avg: "$rating" },
+        },
+      },
+    ]).toArray();
+
+    const stats = myExportStats[0] || {};
+
+    res.send({
+      totalUsers,
+      myTotalExports: stats.myTotalExports || 0,
+      myExportValue: stats.myExportValue || 0,
+      myTotalQuantity: stats.myTotalQuantity || 0,
+      avgRating: stats.avgRating || 0,
+    });
+  } catch (err) {
+    res.status(500).send({ message: "Admin stats failed" });
+  }
+});
+
+app.get("/user/stats", async (req, res) => {
+  const email = req.query.email;
+  if (!email) return res.status(400).send({ message: "Email required" });
+
+  try {
+    const myImports = await importCollection.find({ addedBy: email }).toArray();
+
+    const totalImports = myImports.length;
+    const totalQuantity = myImports.reduce(
+      (sum, item) => sum + (item.quantity || 0),
+      0
+    );
+    const totalSpent = myImports.reduce(
+      (sum, item) => sum + (item.price || 0),
+      0
+    );
+
+    res.send({
+      totalImports,
+      totalQuantity,
+      totalSpent,
+    });
+  } catch (err) {
+    res.status(500).send({ message: "User stats failed" });
+  }
+});
+
+
+
+
     // await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
@@ -150,4 +267,3 @@ run().catch(console.dir);
 app.listen(port, () => {
   console.log(`server app listening on port ${port}`)
 })
-// bNqDEmyZ84wjVEvx
